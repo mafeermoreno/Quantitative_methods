@@ -61,4 +61,55 @@ df['coseno'] = df.apply(lambda row: cosine_similarity(row['vector_q1'], row['vec
 # Guardar resultado en CSV
 df.to_csv('questions_with_similarity.csv', index=False)
 
-print(df.head(10))
+# Actividad 4.3. Similitud en textos mediante TF-IDF y Cadenas de Markov
+
+# Selecciona una fila para analizar (por ejemplo, la primera)
+fila = df.iloc[0]
+q1 = fila["question1"]
+q2 = fila["question2"]
+
+# Obtener el vocabulario de ambas preguntas
+def get_vocab(*texts):
+    vocab = set()
+    for text in texts:
+        vocab.update(text.split())
+    return sorted(vocab)
+
+# Calcular TF
+def compute_tf(text, vocab):
+    words = text.split()
+    total_words = len(words)
+    return {word: words.count(word) / total_words for word in vocab}
+
+# Calcular IDF
+def compute_idf(vocab, texts):
+    N = len(texts)
+    return {
+        word: np.log(N / (sum(word in t.split() for t in texts) + 1)) + 1
+        for word in vocab
+    }
+
+# Calcular TF-IDF
+def compute_tfidf(tf, idf):
+    return {word: tf[word] * idf[word] for word in tf}
+
+# Procesar
+vocabulario = get_vocab(q1, q2)
+tf_q1 = compute_tf(q1, vocabulario)
+tf_q2 = compute_tf(q2, vocabulario)
+idf = compute_idf(vocabulario, [q1, q2])
+tfidf_q1 = compute_tfidf(tf_q1, idf)
+tfidf_q2 = compute_tfidf(tf_q2, idf)
+
+# Crear la tabla
+tabla = pd.DataFrame({
+    "Palabra": vocabulario,
+    "TF(q1)": [tf_q1[w] for w in vocabulario],
+    "TF(q2)": [tf_q2[w] for w in vocabulario],
+    "IDF": [idf[w] for w in vocabulario],
+    "TF-IDF(q1)": [tfidf_q1[w] for w in vocabulario],
+    "TF-IDF(q2)": [tfidf_q2[w] for w in vocabulario],
+})
+
+# Mostrar la tabla completa o parcial
+print(tabla.head(15)) 
