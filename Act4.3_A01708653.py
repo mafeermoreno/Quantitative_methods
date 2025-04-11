@@ -1,115 +1,163 @@
 # María Fernanda Moreno Gómez
-
 # Actividad 4.3. Similitud en textos mediante TF-IDF y Cadenas de Markov
 
-'''
-Instrucciones
-
-
-1. Agrega a tu código de similitud por BoW la vectorización de textos mediante TF-IDF y Cadenas de Markov, con la medida de distancia del coseno para obtener un valor de similitud.
-
-2. Utiliza el dataset de Quora questions para determinar la similitud. Crea columnas llamadas cos_BOW, cos_TFID y cos_MARK donde se registren los resultados. Para los vectores de BoW y TF-IDF, llámalos en el excel como q1_vecBoW, q2_vecBoW, q1_vecTFIDF, etc. Para las matrices de las cadenas de Markov, utiliza algún método (como flatten()) para representarlas como vector y agrégalos como q1_vecMark, etc. 
-
-Nota: observa que la medida de duplicated determina si la pregunta es la misma o no (0 o 1). En nuestro caso, solamente estaremos midiendo qué tan similares son.
-
-Entregables: código fuente y archivo CSV generado.
-'''
-
-# Librerías
 import pandas as pd
 import numpy as np
 import re
 from collections import Counter
 
-# Leer el dataset
-df = pd.read_csv('questions.csv', encoding='ISO-8859-1')
+# Leer solo las primeras 10 filas del dataset
+try:
+    df = pd.read_csv('questions.csv', encoding='ISO-8859-1', nrows=10)
+    print(f"Se cargaron {len(df)} filas del dataset")
+except Exception as e:
+    print(f"Error al leer el archivo: {e}")
+    df = None
 
-# Preprocesar los datos
-def preprocess_text(text):
-    if pd.isna(text) or text.strip() == "":  # Verificar si el texto es NaN o está vacío
-        return "empty"
-    text = str(text).lower()  # Convertir a minúsculas
-    text = re.sub(r'[\"()\[\]{}:?,.!\-]', '', text)  # Quitar signos de puntuación
-    text = re.sub(r'\s+', ' ', text).strip()  # Reemplazar espacios dobles por uno solo
-    return text
+if df is not None:
+    # Preprocesamiento de texto
+    def preprocess_data(text):
+        text = str(text).lower()
+        text = re.sub(r'[^\w\s]', '', text) 
+        return text.split()  
 
-# Aplicar preprocesamiento a las preguntas
-df['question1'] = df['question1'].apply(preprocess_text)
-df['question2'] = df['question2'].apply(preprocess_text)
+    df["tokens_q1"] = df["question1"].apply(preprocess_data)
+    df["tokens_q2"] = df["question2"].apply(preprocess_data)
 
-# Función para convertir texto en vector usando Bag of Words
-def text_to_vector(text):
-    words = text.split()
-    return Counter(words)
-
-# Función para calcular la similitud del coseno
-def cosine_similarity(vec1, vec2):
-    intersection = set(vec1.keys()) & set(vec2.keys())
-    numerator = sum(vec1[word] * vec2[word] for word in intersection)
-    sum1 = sum(val**2 for val in vec1.values())
-    sum2 = sum(val**2 for val in vec2.values())
-    denominator = np.sqrt(sum1) * np.sqrt(sum2)
-    if not denominator:
-        return 0.0
-    return numerator / denominator
-
-# Aplicar vectorización y calcular similitud del coseno
-df['vector_q1'] = df['question1'].apply(text_to_vector)
-df['vector_q2'] = df['question2'].apply(text_to_vector)
-df['coseno'] = df.apply(lambda row: cosine_similarity(row['vector_q1'], row['vector_q2']), axis=1)
-
-# Guardar resultado en CSV
-df.to_csv('questions_with_similarity.csv', index=False)
-
-# Actividad 4.3. Similitud en textos mediante TF-IDF y Cadenas de Markov
-
-# Selecciona una fila para analizar (por ejemplo, la primera)
-fila = df.iloc[0]
-q1 = fila["question1"]
-q2 = fila["question2"]
-
-# Obtener el vocabulario de ambas preguntas
-def get_vocab(*texts):
-    vocab = set()
-    for text in texts:
-        vocab.update(text.split())
-    return sorted(vocab)
-
-# Calcular TF
-def compute_tf(text, vocab):
-    words = text.split()
-    total_words = len(words)
-    return {word: words.count(word) / total_words for word in vocab}
-
-# Calcular IDF
-def compute_idf(vocab, texts):
-    N = len(texts)
-    return {
-        word: np.log(N / (sum(word in t.split() for t in texts) + 1)) + 1
-        for word in vocab
-    }
-
-# Calcular TF-IDF
-def compute_tfidf(tf, idf):
-    return {word: tf[word] * idf[word] for word in tf}
-
-# Procesar
-vocabulario = get_vocab(q1, q2)
-tf_q1 = compute_tf(q1, vocabulario)
-tf_q2 = compute_tf(q2, vocabulario)
-idf = compute_idf(vocabulario, [q1, q2])
-tfidf_q1 = compute_tfidf(tf_q1, idf)
-tfidf_q2 = compute_tfidf(tf_q2, idf)
-
-# Crear la tabla
-tabla = pd.DataFrame({
-    "Palabra": vocabulario,
-    "TF(q1)": [tf_q1[w] for w in vocabulario],
-    "TF(q2)": [tf_q2[w] for w in vocabulario],
-    "IDF": [idf[w] for w in vocabulario],
-    "TF-IDF(q1)": [tfidf_q1[w] for w in vocabulario],
-    "TF-IDF(q2)": [tfidf_q2[w] for w in vocabulario],
-})
-
-# Mostrar la tabla completa o parcial
-print(tabla.head(15)) 
+    # Crear una tabla que contenga todas las preguntas únicas
+    unique_questions = pd.concat([
+        df[["qid1", "tokens_q1"]].rename(columns={"qid1": "qid", "tokens_q1": "tokens"}),
+        df[["qid2", "tokens_q2"]].rename(columns={"qid2": "qid", "tokens_q2": "tokens"})
+    ])
+    unique_questions = unique_questions.drop_duplicates("qid").set_index("qid")
+    all_documents = unique_questions["tokens"].tolist()
+    
+    # Calcular IDF (Inverse Document Frequency)
+    def idf_calculation(documents):
+        N = len(documents)
+        unique_words = set(word for doc in documents for word in doc)
+        idf_values = {}
+        
+        for word in unique_words:
+            df_count = sum(1 for doc in documents if word in doc)
+            idf_values[word] = np.log(N / (df_count + 1)) + 1
+        
+        return idf_values
+    
+    idf = idf_calculation(all_documents)
+    
+    # Calcular TF (Term Frequency) para un documento
+    def tf_calculation(document):
+        word_count = len(document)
+        if word_count == 0:
+            return {}
+        
+        counter = Counter(document)
+        return {word: count / word_count for word, count in counter.items()}
+    
+    # Función de similitud Bag of Words con coseno
+    def cosine_bow(q1, q2):
+        vocab = sorted(list(set(q1) | set(q2)))
+        counter_q1 = Counter(q1)
+        counter_q2 = Counter(q2)
+        
+        vec1 = [counter_q1.get(word, 0) for word in vocab]
+        vec2 = [counter_q2.get(word, 0) for word in vocab]
+        
+        dot = np.dot(vec1, vec2)
+        norm1 = np.linalg.norm(vec1)
+        norm2 = np.linalg.norm(vec2)
+        
+        return dot / (norm1 * norm2) if norm1 and norm2 else 0, vec1, vec2
+    
+    # Función de similitud TF-IDF con coseno
+    def cosine_tfidf(q1, q2, idf_dict):
+        tf_q1 = tf_calculation(q1)
+        tf_q2 = tf_calculation(q2)
+        
+        vocab = sorted(list(set(q1) | set(q2)))
+        
+        tfidf1 = [tf_q1.get(word, 0) * idf_dict.get(word, 0) for word in vocab]
+        tfidf2 = [tf_q2.get(word, 0) * idf_dict.get(word, 0) for word in vocab]
+        
+        dot = np.dot(tfidf1, tfidf2)
+        norm1 = np.linalg.norm(tfidf1)
+        norm2 = np.linalg.norm(tfidf2)
+        
+        return dot / (norm1 * norm2) if norm1 and norm2 else 0, tfidf1, tfidf2
+    
+    # Función de similitud con cadenas de Markov
+    def markov_similarity(q1, q2):
+        # Si alguna de las preguntas es demasiado corta, no podemos crear una matriz de transición
+        if len(q1) <= 1 or len(q2) <= 1:
+            return 0, [], []
+        
+        all_tokens = sorted(list(set(q1 + q2)))
+        token_index = {token: i for i, token in enumerate(all_tokens)}
+        n = len(all_tokens)
+        
+        # Crear matrices de transición
+        mat1 = np.zeros((n, n))
+        mat2 = np.zeros((n, n))
+        
+        # Llenar matriz para q1
+        for i in range(len(q1)-1):
+            current = token_index[q1[i]]
+            next_token = token_index[q1[i+1]]
+            mat1[current][next_token] += 1
+        
+        # Normalizar filas de mat1
+        row_sums = mat1.sum(axis=1)
+        row_sums[row_sums == 0] = 1  # Evitar división por cero
+        mat1 = mat1 / row_sums[:, np.newaxis]
+        
+        # Llenar matriz para q2
+        for i in range(len(q2)-1):
+            current = token_index[q2[i]]
+            next_token = token_index[q2[i+1]]
+            mat2[current][next_token] += 1
+        
+        # Normalizar filas de mat2
+        row_sums = mat2.sum(axis=1)
+        row_sums[row_sums == 0] = 1
+        mat2 = mat2 / row_sums[:, np.newaxis]
+        
+        # Aplanar matrices y calcular similitud de coseno
+        flat1 = mat1.flatten()
+        flat2 = mat2.flatten()
+        
+        dot = np.dot(flat1, flat2)
+        norm1 = np.linalg.norm(flat1)
+        norm2 = np.linalg.norm(flat2)
+        
+        return dot / (norm1 * norm2) if norm1 and norm2 else 0, flat1.tolist(), flat2.tolist()
+    
+    # Calcular similitudes para cada par de preguntas
+    bow_results = df.apply(lambda row: cosine_bow(row["tokens_q1"], row["tokens_q2"]), axis=1)
+    df["bag_of_words_cosine"] = bow_results.apply(lambda x: x[0])
+    df["vector_q1"] = bow_results.apply(lambda x: x[1])
+    df["vector_q2"] = bow_results.apply(lambda x: x[2])
+    
+    tfidf_results = df.apply(lambda row: cosine_tfidf(row["tokens_q1"], row["tokens_q2"], idf), axis=1)
+    df["IDF_cosine"] = tfidf_results.apply(lambda x: x[0])
+    df["TF(text1)*IDF"] = tfidf_results.apply(lambda x: x[1])
+    df["TF(text2)*IDF"] = tfidf_results.apply(lambda x: x[2])
+    
+    markov_results = df.apply(lambda row: markov_similarity(row["tokens_q1"], row["tokens_q2"]), axis=1)
+    df["markov_cosine"] = markov_results.apply(lambda x: x[0])
+    df["markov_matrix_q1"] = markov_results.apply(lambda x: x[1])
+    df["markov_matrix_q2"] = markov_results.apply(lambda x: x[2])
+    
+    # Crear una copia final con todas las columnas requeridas (tanto las tuyas como las de tu compañero)
+    df_final = df[[
+        "id", "qid1", "qid2", "question1", "question2", "is_duplicate",
+        "vector_q1", "vector_q2", "bag_of_words_cosine",
+        "TF(text1)*IDF", "TF(text2)*IDF", "IDF_cosine",
+        "markov_matrix_q1", "markov_matrix_q2", "markov_cosine"
+    ]]
+    
+    # Guardar resultados en CSV
+    output_path = "questions_with_all_similarities.csv"
+    df_final.to_csv(output_path, index=False)
+    
+    print(f"\nCSV creado: {output_path}")
