@@ -3,7 +3,6 @@ import numpy as np
 import re
 import os
 from collections import Counter
-from tqdm import tqdm
 
 # Preprocesar los datos para poner el texto en minúsculas, eliminar puntuación y tokenizar
 def preprocess(text):
