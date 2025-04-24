@@ -127,17 +127,17 @@ def find_texts_directory():
     """Busca la carpeta 'texts' en varias ubicaciones posibles"""
     # Posibles rutas para la carpeta de textos
     possible_paths = [
-        "texts",                               # Si estamos en la carpeta Actividad 4.4
-        os.path.join("Actividad 4.4", "texts"),  # Si estamos en la carpeta padre
-        os.path.join("..", "texts"),             # Si estamos en otra carpeta dentro de Actividad 4.4
-        "."                                     # Si los textos están en la misma carpeta que el script
+        "texts",                               
+        os.path.join("Actividad 4.4", "texts"), 
+        os.path.join("..", "texts"),             
+        "."                                   
     ]
     
     for path in possible_paths:
         if os.path.isdir(path) and os.path.isfile(os.path.join(path, "original.txt")):
             return path
     
-    # Si no se encuentra, preguntar al usuario
+    # Si no se encuentra la ruta, preguntar al usuario
     print("No se encontró automáticamente la carpeta 'texts'. Por favor, ingrese la ruta:")
     user_path = input().strip()
     if os.path.isdir(user_path):
